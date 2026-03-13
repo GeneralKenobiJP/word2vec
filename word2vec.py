@@ -124,3 +124,9 @@ class Word2Vec:
                 break
 
         return results
+
+    def compute_embedding(self,
+                          query: str,
+                          word_to_id: dict[str, int]):
+        id = word_to_id[query]
+        return self.W_in[id]
