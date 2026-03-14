@@ -1,3 +1,5 @@
+import json
+
 import numpy as np
 from math_utils import sigmoid
 
@@ -130,3 +132,42 @@ class Word2Vec:
                           word_to_id: dict[str, int]):
         id = word_to_id[query]
         return self.W_in[id]
+
+    def save(self, path: str, word_to_id: dict[str, int]) -> None:
+        vocab_json = json.dumps(word_to_id, ensure_ascii=False)
+        np.savez_compressed(
+            path,
+            W_in=self.W_in,
+            W_out=self.W_out,
+            vocab_json=vocab_json,
+            vocab_size=self.W_in.shape[0],
+            embedding_dim=self.W_in.shape[1],
+            lr=self.lr,
+            negative_samples=self.negative_samples,
+        )
+
+    @staticmethod
+    def load(path: str) -> tuple["Word2Vec", dict[str, int], dict[int, str]]:
+        data = np.load(path, allow_pickle=False)
+
+        W_in = data["W_in"]
+        W_out = data["W_out"]
+        vocab_json = str(data["vocab_json"])
+        word_to_id = json.loads(vocab_json)
+        word_to_id = {str(word): int(idx) for word, idx in word_to_id.items()}
+        id_to_word = {idx: word for word, idx in word_to_id.items()}
+
+        lr = float(data["lr"])
+        negative_samples = int(data["negative_samples"])
+
+        model = Word2Vec(
+            vocab_size=W_in.shape[0],
+            embedding_dim=W_in.shape[1],
+            lr=lr,
+            negative_samples=negative_samples,
+        )
+
+        model.W_in = W_in.astype(np.float64, copy=True)
+        model.W_out = W_out.astype(np.float64, copy=True)
+
+        return model, word_to_id, id_to_word
