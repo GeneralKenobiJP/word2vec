@@ -1,4 +1,5 @@
 import json
+from copy import deepcopy
 
 import numpy as np
 
@@ -18,6 +19,7 @@ class Word2Vec:
         self.lr = lr
         self.negative_samples = negative_samples
         self.distribution = self._negative_sampling_distribution()
+        self.subsampling_probs = None
 
         self.rng = np.random.default_rng(seed)
 
@@ -41,6 +43,19 @@ class Word2Vec:
 
         dist = counts ** 0.75
         return dist / dist.sum()
+
+    def _compute_subsampling_probs(self, counts: np.ndarray, subsampling_constant: float = 1e-5) -> np.ndarray:
+        freqs = counts / counts.sum()
+        probs = np.sqrt(subsampling_constant / (freqs + 1e-9))
+
+        return np.minimum(1.0, probs)
+
+    def _subsample_corpus(self, corpus_ids: list[int] | np.ndarray) -> np.ndarray:
+        corpus_ids = np.asarray(corpus_ids, dtype=np.int64)
+
+        probs = self.subsampling_probs[corpus_ids]
+        mask = self.rng.random(len(corpus_ids)) < probs
+        return corpus_ids[mask]
 
     def step(self, center_idx: int, context_idx: int) -> float:
         v_c = self.W_in[center_idx].copy()
@@ -80,18 +95,21 @@ class Word2Vec:
               counts: np.ndarray = None,
               word_to_id: dict[str, int] = None,
               window_size: int = 5,
+              subsampling_constant: float = 1e-5,
               epochs: int = 10):
         corpus_len = len(corpus_ids)
         self.distribution = self._negative_sampling_distribution(counts)
+        self.subsampling_probs = self._compute_subsampling_probs(counts, subsampling_constant)
 
         losses = []
 
         for epoch in range(epochs):
+            cur_corpus_ids = self._subsample_corpus(corpus_ids)
 
             total_loss = 0.0
             pair_count = 0
 
-            for t, center_idx in enumerate(corpus_ids):
+            for t, center_idx in enumerate(cur_corpus_ids):
                 context_window_left = max(0, t - window_size)
                 context_window_right = min(corpus_len, t + window_size - 1)
 
@@ -99,7 +117,7 @@ class Word2Vec:
                     if j == t:
                         continue
 
-                    context_idx = corpus_ids[j]
+                    context_idx = cur_corpus_ids[j]
 
                     pair_loss = self.step(center_idx, context_idx)
 
