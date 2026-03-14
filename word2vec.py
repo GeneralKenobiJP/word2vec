@@ -1,7 +1,10 @@
 import json
 
 import numpy as np
+
 from math_utils import sigmoid
+
+TEMP_MODEL_PATH = "model/temp/temp_model.npz"
 
 class Word2Vec:
     def __init__(self,
@@ -14,6 +17,7 @@ class Word2Vec:
         self.embedding_dim = embedding_dim
         self.lr = lr
         self.negative_samples = negative_samples
+        self.distribution = self._negative_sampling_distribution()
 
         self.rng = np.random.default_rng(seed)
 
@@ -30,6 +34,13 @@ class Word2Vec:
                 negatives.append(candidate)
 
         return np.array(negatives, dtype=np.int64)
+
+    def _negative_sampling_distribution(self, counts: np.ndarray = None) -> np.ndarray:
+        if counts is None:
+            return np.ones(self.negative_samples, dtype=np.float64) / self.negative_samples
+
+        dist = counts ** 0.75
+        return dist / dist.sum()
 
     def step(self, center_idx: int, context_idx: int) -> float:
         v_c = self.W_in[center_idx].copy()
@@ -66,9 +77,12 @@ class Word2Vec:
 
     def train(self,
               corpus_ids: list[int],
+              counts: np.ndarray = None,
+              word_to_id: dict[str, int] = None,
               window_size: int = 5,
               epochs: int = 10):
         corpus_len = len(corpus_ids)
+        self.distribution = self._negative_sampling_distribution(counts)
 
         losses = []
 
@@ -97,6 +111,9 @@ class Word2Vec:
             losses.append(avg_loss)
 
             print(f"Epoch {epoch}: avg loss per pair = {avg_loss}")
+
+            if word_to_id:
+                self.save(TEMP_MODEL_PATH, word_to_id)
 
         return losses
 
