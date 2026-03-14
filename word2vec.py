@@ -30,7 +30,7 @@ class Word2Vec:
         negatives = []
 
         while len(negatives) < self.negative_samples:
-            candidate = self.rng.choice(self.vocab_size)
+            candidate = self.rng.choice(self.vocab_size, p=self.distribution)
 
             if candidate != positive_idx:
                 negatives.append(candidate)
@@ -39,7 +39,7 @@ class Word2Vec:
 
     def _negative_sampling_distribution(self, counts: np.ndarray = None) -> np.ndarray:
         if counts is None:
-            return np.ones(self.negative_samples, dtype=np.float64) / self.negative_samples
+            return np.ones(self.vocab_size, dtype=np.float64) / self.negative_samples
 
         dist = counts ** 0.75
         return dist / dist.sum()
@@ -50,7 +50,7 @@ class Word2Vec:
 
         return np.minimum(1.0, probs)
 
-    def _subsample_corpus(self, corpus_ids: list[int] | np.ndarray) -> np.ndarray:
+    def _subsample_corpus(self, corpus_ids: list[int] | np.ndarray) -> np.ndarray[int]:
         corpus_ids = np.asarray(corpus_ids, dtype=np.int64)
 
         probs = self.subsampling_probs[corpus_ids]
@@ -92,12 +92,11 @@ class Word2Vec:
 
     def train(self,
               corpus_ids: list[int],
-              counts: np.ndarray = None,
+              counts: np.ndarray,
               word_to_id: dict[str, int] = None,
               window_size: int = 5,
               subsampling_constant: float = 1e-5,
               epochs: int = 10):
-        corpus_len = len(corpus_ids)
         self.distribution = self._negative_sampling_distribution(counts)
         self.subsampling_probs = self._compute_subsampling_probs(counts, subsampling_constant)
 
@@ -105,13 +104,14 @@ class Word2Vec:
 
         for epoch in range(epochs):
             cur_corpus_ids = self._subsample_corpus(corpus_ids)
+            cur_corpus_len = len(cur_corpus_ids)
 
             total_loss = 0.0
             pair_count = 0
 
             for t, center_idx in enumerate(cur_corpus_ids):
                 context_window_left = max(0, t - window_size)
-                context_window_right = min(corpus_len, t + window_size - 1)
+                context_window_right = min(cur_corpus_len, t + window_size + 1)
 
                 for j in range(context_window_left, context_window_right):
                     if j == t:
@@ -166,7 +166,7 @@ class Word2Vec:
                           query: str,
                           word_to_id: dict[str, int]):
         id = word_to_id[query]
-        return self.W_in[id]
+        return self.W_in[id].copy()
 
     def save(self, path: str, word_to_id: dict[str, int]) -> None:
         vocab_json = json.dumps(word_to_id, ensure_ascii=False)
