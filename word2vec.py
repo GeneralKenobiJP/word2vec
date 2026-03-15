@@ -248,22 +248,26 @@ class Word2Vec:
         return losses
 
     def most_similar(self,
-                     query: str,
+                     query: str | np.ndarray[float],
                      word_to_id: dict[str, int],
                      id_to_word: dict[int, str],
                      top_k: int = 5) -> list[tuple[str, float]]:
         """
         Find the most similar words to the query.
         That is, given a word, find k words that lie closest in the embedding space.
-        :param query: Word to find similar words for.
+        :param query: Word or embedding to find similar words for.
         :param word_to_id: dictionary mapping words to their indices in the vocabulary.
         :param id_to_word: dictionary mapping indices in vocabulary to the words.
         :param top_k: top k similar words to return
         :return: top k most similar words to the query.
         """
-        # Compute embedding of the query
-        q = word_to_id[query]
-        q_vec = self.W_in[q]
+        if isinstance(query, str):
+            # Compute embedding of the query
+            q = word_to_id[query]
+            q_vec = self.W_in[q]
+        else:
+            q = None
+            q_vec = query
 
         # Compute cosine similarity between the query embedding and other embeddings
         score = np.dot(self.W_in, q_vec)
@@ -276,7 +280,7 @@ class Word2Vec:
         results = []
 
         for idx in best_ids:
-            if idx == q:
+            if isinstance(query, str) and idx == q:
                 continue
             results.append((id_to_word[idx], cos_similarity[idx]))
             if len(results) >= top_k:

@@ -10,72 +10,46 @@ def analogy(
     a: str,
     b: str,
     c: str,
-    W: np.ndarray,
+    model: Word2Vec,
     word_to_id: dict[str, int],
     id_to_word: dict[int, str],
     top_k: int = 5,
 ) -> list[tuple[str, float]]:
     """
-    Solve analogy of the form: a - b + c ~= d
+    Find a vector d that has the smallest error when
+    substituting into the following vector equation: v(b) - v(a) + v(c) ~= d,
 
-    Returns the top_k nearest words to v(a) - v(b) + v(c),
+    Returns the top_k nearest words to v(b) - v(a) + v(c),
     excluding a, b, and c themselves.
 
-    Parameters
-    ----------
-    a, b, c : str
-        Words in the analogy expression.
-    W : np.ndarray
-        Embedding matrix of shape (vocab_size, embedding_dim).
-    word_to_id : dict[str, int]
-        Word -> integer id mapping.
-    id_to_word : dict[int, str]
-        Integer id -> word mapping.
-    top_k : int
-        Number of candidates to return.
-
-    Returns
-    -------
-    list[tuple[str, float]]
-        List of (word, cosine_similarity).
+    :param a, b, c: queries to embed
+    :param model: word2vec model
+    :param word_to_id: dictionary mapping words to their indices in the vocabulary.
+    :param id_to_word: dictionary mapping indices in vocabulary to the words.
+    :param top_k: top k closest analogies to return
+    :return: k closest embeddings to v(b) - v(a) + v(c)
     """
-    # Check vocabulary membership explicitly.
+    # Check vocabulary membership explicitly
     for word in (a, b, c):
         if word not in word_to_id:
             raise KeyError(f"Word '{word}' is not in the vocabulary.")
 
-    # Retrieve embeddings.
-    v_a = W[word_to_id[a]]
-    v_b = W[word_to_id[b]]
-    v_c = W[word_to_id[c]]
+    # Retrieve embeddings
+    v_a = model.compute_embedding(a, word_to_id)
+    v_b = model.compute_embedding(b, word_to_id)
+    v_c = model.compute_embedding(c, word_to_id)
 
-    # Compute target vector in the original embedding space.
-    target = v_a - v_b + v_c
+    # Compute target vector in the embedding space
+    target = v_b - v_a + v_c
 
-    # Compute cosine similarity between every vocabulary embedding and target.
-    scores = W @ target
-    W_norms = np.linalg.norm(W, axis=1)
-    target_norm = np.linalg.norm(target)
-
-    sims = scores / np.maximum(W_norms * target_norm, 1e-12)
-
-    # Sort from largest cosine similarity to smallest.
-    ranked_ids = np.argsort(-sims)
-
-    # Exclude the input words.
-    banned = {word_to_id[a], word_to_id[b], word_to_id[c]}
-
-    results = []
-    for idx in ranked_ids:
-        if idx in banned:
-            continue
-        results.append((id_to_word[idx], float(sims[idx])))
-        if len(results) == top_k:
-            break
+    results = model.most_similar(target, word_to_id, id_to_word, top_k)
 
     return results
 
 def simple_experiment():
+    """
+    Check if the code compiles, and whether the model can be properly saved and loaded.
+    """
     text = "Did you ever hear the tragedy of Darth Plagueis the Wise? I thought not. It's not a story the Jedi would tell you. It's a Sith legend. Darth Plagueis was a Dark Lord of the Sith, so powerful and so wise he could use the Force to influence the midichlorians to create life... He had such a knowledge of the dark side that he could even keep the ones he cared about from dying. The dark side of the Force is a pathway to many abilities some consider to be unnatural. He became so powerful... the only thing he was afraid of was losing his power, which eventually, of course, he did. Unfortunately, he taught his apprentice everything he knew, then his apprentice killed him in his sleep. It's ironic he could save others from death, but not himself."
 
     tokens = tokenize(text)
@@ -97,7 +71,7 @@ def simple_experiment():
         epochs=10,
     )
 
-    model.save("model/test_model_crime_and_punishment.npz", word_to_id)
+    model.save("model/test_model.npz", word_to_id)
 
     for word in ["you", "lord", "tragedy", "wise"]:
         print(f"\nNearest neighbors of '{word}':")
@@ -122,6 +96,15 @@ def simple_experiment():
 def proper_experiment(dataset: str, model_name: str,
                       query_a: str, query_b: str, query_c: str, query_d: str,
                       retrain: bool = True):
+    """
+    Train the model on the dataset and perform tests
+    :param dataset: dataset to train the model on
+    :param model_name: name of the model (for saving purposes)
+    :param query_a, query_b, query_c, query_d: queries for experiments
+        (we will try to see if v(b) - v(a) + v(c) ~= v(d))
+    :param retrain: should we retrain the model or load it from file?
+    """
+    # Preprocess
     text = read_txt_file(dataset)
 
     tokens = tokenize(text)
@@ -163,7 +146,7 @@ def proper_experiment(dataset: str, model_name: str,
         model.save(model_name, word_to_id)
 
     else:
-        model, word_to_id, _ = Word2Vec.load(model_name)
+        model, word_to_id, id_to_word = Word2Vec.load(model_name)
 
     emb_a = model.compute_embedding(query_a, word_to_id)
     emb_b = model.compute_embedding(query_b, word_to_id)
@@ -192,17 +175,19 @@ def proper_experiment(dataset: str, model_name: str,
         plt.annotate(txt, (embeddings[i, 0], embeddings[i, 1]))
     plt.show()
 
-    results = analogy(query_a, query_b, query_c, model.W_in, word_to_id, id_to_word, 20)
+    results = analogy(query_a, query_b, query_c, model, word_to_id, id_to_word, 20)
     print(results)
+
+    print(model.most_similar('catholic', word_to_id, id_to_word, 10))
 
 if __name__ == '__main__':
     print('Hello World')
 
-    # proper_experiment("dataset/wiki.train.tokens", "model/wiki.npz",
-    #                   "british", "french", "london", "paris",
-    #                   retrain=False)
     proper_experiment("dataset/wiki.train.tokens", "model/wiki.npz",
-                      "quick", "slow", "quickly", "slowly",
+                      "british", "french", "london", "paris",
                       retrain=False)
+    # proper_experiment("dataset/wiki.train.tokens", "model/wiki.npz",
+    #                   "man", "woman", "king", "queen",
+    #                   retrain=False)
 
     print('Goodbye World!')
