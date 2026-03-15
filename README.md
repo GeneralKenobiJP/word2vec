@@ -112,6 +112,10 @@ I then ran a PCA to illustrate the embeddings in 2D.
 #### ("quick", "slow", "quickly", "slowly")
 ![2D PCA of vector embeddings](./plots/quick_slow_quickly_slowly.png)
 
+The estimation is far from being perfect, but one can notice that if we rescaled (v(b) - v(a))
+by suitable factors, we would get a good approximation, that is - adding the vector (v(b) - v(a)) brings us in an
+approximately correct direction towards the actual embedding.
+
 It must be noted, however, that a lot of sensible groupings did *not* display this expected property.
 I suspect it is due to an insufficient training time caused by time and computation power constraints.
 
