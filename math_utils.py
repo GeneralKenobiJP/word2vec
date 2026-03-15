@@ -1,6 +1,12 @@
 import numpy as np
 
 def sigmoid(x):
+    """
+    Computes the sigmoid function.
+    sigm(x) = 1 / (1 + exp(-x))
+    :param x: the argument
+    :return: the sigmoid of the argument
+    """
     x = np.asarray(x, dtype=np.float64)
 
     # Numerically stable computation of the sigmoid function.
