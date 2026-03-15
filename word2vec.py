@@ -83,7 +83,7 @@ class Word2Vec:
         :return: An ndarray of probability distribution for negative sampling
         """
         if counts is None:
-            return np.ones(self.vocab_size, dtype=np.float64) / self.negative_samples
+            return np.ones(self.vocab_size, dtype=np.float64) / self.vocab_size
 
         dist = counts ** 0.75
         return dist / dist.sum()
